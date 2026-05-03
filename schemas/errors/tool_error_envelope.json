@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "title": "Canonical tool error envelope (Form A)",
+  "description": "Used by mnemos's execute_tool() dispatcher and any service that exposes tool errors as structured content rather than HTTP error codes.",
+  "type": "object",
+  "properties": {
+    "success": {
+      "type": "boolean",
+      "const": false,
+      "description": "Always false for error envelopes; true responses don't use this shape."
+    },
+    "error": {
+      "type": "string",
+      "description": "Human-readable error message safe to show to end users. Must NOT contain stack traces or sensitive data."
+    },
+    "error_class": {
+      "type": "string",
+      "description": "Optional: Python exception class name or domain-specific classifier. Used by clients for retry/error-recovery logic.",
+      "examples": ["HTTPStatusError", "ValueError", "PermissionError", "RateLimitExceeded", "ResourceNotFound"]
+    }
+  },
+  "required": ["success", "error"]
+}

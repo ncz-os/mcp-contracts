@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "title": "ic_result envelope (Form B)",
+  "description": "Used by ic-engine bridge. Emitted as the LAST line of stdout from the ic-engine subprocess. Parsed by _run_ic_engine() into the tool result's ic_result field.",
+  "type": "object",
+  "properties": {
+    "ic_result": {
+      "type": "object",
+      "properties": {
+        "script": {
+          "type": "string",
+          "description": "Script name that ran inside ic-engine (e.g., 'ask.py', 'fetch_holdings.py'). Used by the cobol harness's SCRIPT_EXIT_RE regex.",
+          "examples": ["ask.py", "fetch_holdings.py", "optimize.py", "rebalance_tax.py"]
+        },
+        "exit_code": {
+          "type": "integer",
+          "description": "POSIX exit code. 0 = success; non-zero = failure. The harness picks this up via the same regex.",
+          "minimum": 0,
+          "maximum": 255
+        },
+        "duration_ms": {
+          "type": "integer",
+          "description": "Wall-clock duration of the script run in milliseconds.",
+          "minimum": 0
+        },
+        "hmac": {
+          "type": "string",
+          "description": "Optional HMAC over the script's output, for clients that want to verify integrity. Synthesized by some agents in their narrative quote of the envelope; not always present in the actual envelope.",
+          "pattern": "^[a-f0-9]{12,64}$"
+        },
+        "engine_version": {
+          "type": "string",
+          "description": "Optional: ic-engine version string."
+        },
+        "run_id": {
+          "type": "string",
+          "description": "Optional: UUID for the run, useful for log correlation."
+        }
+      },
+      "required": ["script", "exit_code"]
+    }
+  },
+  "required": ["ic_result"]
+}

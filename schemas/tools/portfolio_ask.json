@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "title": "portfolio_ask inputSchema",
+  "description": "Ask a natural-language portfolio question. Routes through ic-engine's deterministic pipeline.",
+  "type": "object",
+  "properties": {
+    "question": {
+      "type": "string",
+      "description": "The user's portfolio question, e.g. 'What is in my portfolio?', 'How is performance?', 'What are my biggest tech holdings?'"
+    }
+  },
+  "required": ["question"]
+}

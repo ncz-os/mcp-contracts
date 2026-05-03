@@ -1,0 +1,8 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "title": "portfolio_setup inputSchema",
+  "description": "Auto-discover portfolio files in the configured portfolio directory. Use on first run or after the user uploads a new portfolio file.",
+  "type": "object",
+  "properties": {},
+  "required": []
+}
