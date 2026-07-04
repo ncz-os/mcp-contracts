@@ -1,3 +1,11 @@
+> # 📍 Moved to GitLab
+> **The canonical, authoritative home of this project is GitLab — always:**
+> ## 👉 https://gitlab.com/ncz-os/mcp-contracts
+>
+> This GitHub repository is a **frozen, read-only mirror**. All development, issues, and releases happen on GitLab. Please open issues and merge requests there. The full history of this stub is preserved on GitLab.
+
+---
+
 # mcp-contracts
 
 Cross-project MCP contract for the claws-ecosystem (mnemos + ic-engine + mnemos-rs).
