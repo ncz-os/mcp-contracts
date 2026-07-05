@@ -29,6 +29,13 @@ validates its MCP surface against the schemas here.
 2. Add an entry to the project's TOOL_REGISTRY (in mnemos: `mnemos/mcp/tools/__init__.py`; in ic-engine: `bridge/investorclaw_bridge/mcp/tools/__init__.py`).
 3. Run the project's `test_mcp_compliance.py` to verify the live MCP server returns matching schemas.
 
+For bearer-protected transports, keep tokens out of shell history and process
+argv:
+
+```bash
+MCP_BEARER_TOKEN=... python3 test_mcp_compliance.py --url http://localhost:5004/sse
+```
+
 ## Naming convention
 
 `<domain>_<action>[_<target>]` — see `docs/naming-convention.md`. Examples: `portfolio_ask`, `portfolio_holdings`, `memory_create`, `memory_search`, `kg_create_triple`.

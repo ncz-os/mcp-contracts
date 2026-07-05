@@ -14,8 +14,8 @@ Connects to an MCP server (HTTP/SSE or streamable-http) and validates:
 
 Usage:
   python3 test_mcp_compliance.py --url http://localhost:18090/mcp
-  python3 test_mcp_compliance.py --url http://localhost:5004/sse --transport sse
   python3 test_mcp_compliance.py --url http://localhost:18090/mcp --schemas-dir ./schemas/tools
+  MCP_BEARER_TOKEN=... python3 test_mcp_compliance.py --url http://localhost:5004/sse
 
 Run against:
   - ic-engine bridge:  http://localhost:18090/mcp  (transport=streamable-http)
@@ -28,13 +28,16 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
 import urllib.request
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 NAMING_RE = re.compile(r"^[a-z][a-z0-9]*(_[a-z][a-z0-9]*)+$")
+MAX_RESPONSE_BYTES = 8 * 1024 * 1024
 
 
 def parse_sse(body: str) -> dict | None:
@@ -64,10 +67,17 @@ def post(url: str, payload: dict, session_id: str | None = None,
     req = urllib.request.Request(url, data=json.dumps(payload).encode(), headers=headers, method="POST")
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
-            body = resp.read().decode("utf-8", errors="replace")
+            body = read_capped_body(resp)
             return parse_sse(body), resp.headers.get("mcp-session-id"), resp.status
     except Exception as exc:
         return {"error": str(exc)}, None, 0
+
+
+def read_capped_body(resp: Any) -> str:
+    body = resp.read(MAX_RESPONSE_BYTES + 1)
+    if len(body) > MAX_RESPONSE_BYTES:
+        raise RuntimeError(f"MCP response exceeded {MAX_RESPONSE_BYTES} bytes")
+    return body.decode("utf-8", errors="replace")
 
 
 def init_session(url: str, bearer: str | None = None) -> str | None:
@@ -142,12 +152,21 @@ def schemas_compatible(live: dict, contract: dict) -> tuple[bool, list[str]]:
 def main() -> int:
     ap = argparse.ArgumentParser(description="MCP compliance test for the claws ecosystem")
     ap.add_argument("--url", required=True, help="MCP server endpoint URL")
-    ap.add_argument("--bearer", default=None, help="Bearer token (for mnemos HTTP transport)")
+    ap.add_argument("--bearer", default=None,
+                    help="Deprecated: bearer token value. Prefer --bearer-env to avoid argv leaks.")
+    ap.add_argument("--bearer-env", default="MCP_BEARER_TOKEN",
+                    help="Environment variable containing the bearer token (default: MCP_BEARER_TOKEN)")
     ap.add_argument("--schemas-dir", default=str(Path(__file__).parent / "schemas" / "tools"),
                     help="Directory with contract schemas (default: ./schemas/tools/)")
     ap.add_argument("--strict-naming", action="store_true",
                     help="Fail if any live tool name violates the naming convention")
     args = ap.parse_args()
+
+    url_error = validate_endpoint_url(args.url)
+    if url_error:
+        print(f"FATAL: {url_error}", file=sys.stderr)
+        return 2
+    bearer = resolve_bearer(args)
 
     schemas_dir = Path(args.schemas_dir)
     if not schemas_dir.is_dir():
@@ -158,13 +177,13 @@ def main() -> int:
     print(f"[compliance] loaded {len(contract_schemas)} contract schemas from {schemas_dir}")
     print(f"[compliance] connecting to {args.url}")
 
-    sid = init_session(args.url, bearer=args.bearer)
+    sid = init_session(args.url, bearer=bearer)
     if sid is None:
         print("FATAL: MCP initialize handshake failed", file=sys.stderr)
         return 1
 
     print(f"[compliance] session: {sid or '(none returned — SSE)'}")
-    tools = list_tools(args.url, sid, bearer=args.bearer)
+    tools = list_tools(args.url, sid, bearer=bearer)
     print(f"[compliance] live tools: {len(tools)}")
 
     failures: list[str] = []
@@ -203,6 +222,28 @@ def main() -> int:
         return 1
     print("[compliance] ALL CHECKS PASSED — no drift detected")
     return 0
+
+
+def validate_endpoint_url(url: str) -> str | None:
+    parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"}:
+        return f"--url must be http or https, got {parsed.scheme!r}"
+    if not parsed.netloc:
+        return "--url must include a host"
+    if parsed.username or parsed.password:
+        return "--url must not contain embedded credentials"
+    return None
+
+
+def resolve_bearer(args: argparse.Namespace) -> str | None:
+    if args.bearer:
+        print(
+            "WARN: --bearer exposes the token in process argv; use --bearer-env instead",
+            file=sys.stderr,
+        )
+        return args.bearer
+    env_name = args.bearer_env.strip()
+    return os.environ.get(env_name) if env_name else None
 
 
 if __name__ == "__main__":
