@@ -43,3 +43,19 @@ MCP_BEARER_TOKEN=... python3 test_mcp_compliance.py --url http://localhost:5004/
 ## Versioning
 
 This repo is versioned via git tags. Both projects pin to a tag. Breaking changes to a tool schema → bump major. Adding a new optional field → bump minor. Adding a new tool → bump minor.
+
+
+## Build infrastructure & partners
+
+Continuous integration and package distribution for this project are generously
+supported by our open-source infrastructure partners:
+
+- **[GitLab](https://gitlab.com/)** — canonical source hosting and CI pipelines
+  (format / lint / test gates), via the
+  [GitLab for Open Source](https://about.gitlab.com/solutions/open-source/) program.
+- **[Buildkite](https://buildkite.com/)** — CI/CD orchestration with hosted macOS
+  and Linux agents, and our APT package registry host
+  (`packages.buildkite.com/ncz-os/ncz`), via the
+  [Buildkite Open Source](https://buildkite.com/pricing) program.
+
+Thank you to both for backing open-source software.
