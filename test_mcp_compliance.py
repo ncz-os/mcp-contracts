@@ -7,9 +7,8 @@ Connects to an MCP server (HTTP/SSE or streamable-http) and validates:
   1. Server responds to `tools/list` with a non-empty tool registry
   2. Every tool's name follows the `<domain>_<action>[_<target>]` convention
      (see docs/naming-convention.md)
-  3. For every tool name that has a schema file in this repo's
-     `schemas/tools/<name>.json`, the live tool's inputSchema matches
-     the contract schema
+  3. Every live tool has a schema file in this repo's
+     `schemas/tools/<name>.json`, and its inputSchema matches that contract
   4. Server can be reached via standard MCP initialize handshake
 
 Usage:
@@ -31,13 +30,19 @@ import json
 import os
 import re
 import sys
+import urllib.error
 import urllib.request
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 
 NAMING_RE = re.compile(r"^[a-z][a-z0-9]*(_[a-z][a-z0-9]*)+$")
 MAX_RESPONSE_BYTES = 8 * 1024 * 1024
+PROTOCOL_VERSION = "2025-06-18"
+SCHEMA_ANNOTATIONS = {
+    "$comment", "$schema", "default", "deprecated", "description", "examples",
+    "readOnly", "title", "writeOnly",
+}
 
 
 def parse_sse(body: str) -> dict | None:
@@ -55,7 +60,8 @@ def parse_sse(body: str) -> dict | None:
 
 
 def post(url: str, payload: dict, session_id: str | None = None,
-         bearer: str | None = None, timeout: int = 30) -> tuple[dict | None, str | None, int]:
+         bearer: str | None = None, timeout: int = 30,
+         protocol_version: str | None = None) -> tuple[dict | None, str | None, int]:
     headers = {
         "Content-Type": "application/json",
         "Accept": "application/json, text/event-stream",
@@ -64,11 +70,15 @@ def post(url: str, payload: dict, session_id: str | None = None,
         headers["mcp-session-id"] = session_id
     if bearer:
         headers["Authorization"] = f"Bearer {bearer}"
+    if protocol_version:
+        headers["MCP-Protocol-Version"] = protocol_version
     req = urllib.request.Request(url, data=json.dumps(payload).encode(), headers=headers, method="POST")
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             body = read_capped_body(resp)
             return parse_sse(body), resp.headers.get("mcp-session-id"), resp.status
+    except urllib.error.HTTPError as exc:
+        return {"error": str(exc)}, None, exc.code
     except Exception as exc:
         return {"error": str(exc)}, None, 0
 
@@ -80,29 +90,125 @@ def read_capped_body(resp: Any) -> str:
     return body.decode("utf-8", errors="replace")
 
 
-def init_session(url: str, bearer: str | None = None) -> str | None:
-    init_payload = {
-        "jsonrpc": "2.0", "id": 0, "method": "initialize",
-        "params": {
-            "protocolVersion": "2025-06-18",
-            "capabilities": {},
-            "clientInfo": {"name": "mcp-compliance-test", "version": "1.0"},
-        },
-    }
-    resp, sid, status = post(url, init_payload, bearer=bearer)
-    if not sid and resp and "result" in (resp or {}):
-        # SSE transport doesn't always return a session ID header; that's OK.
-        return ""
-    return sid
+def read_sse_event(resp: Any) -> tuple[str, str]:
+    """Read one event from an open SSE response without consuming the stream."""
+    event_type = "message"
+    data_lines: list[str] = []
+    total = 0
+    while True:
+        raw = resp.readline(MAX_RESPONSE_BYTES + 1)
+        if not raw:
+            raise RuntimeError("SSE stream closed before a complete event arrived")
+        total += len(raw)
+        if total > MAX_RESPONSE_BYTES:
+            raise RuntimeError(f"MCP SSE event exceeded {MAX_RESPONSE_BYTES} bytes")
+        line = raw.decode("utf-8", errors="replace").rstrip("\r\n")
+        if not line:
+            if data_lines:
+                return event_type, "\n".join(data_lines)
+            event_type = "message"
+            continue
+        if line.startswith("event:"):
+            event_type = line[6:].lstrip()
+        elif line.startswith("data:"):
+            data_lines.append(line[5:].lstrip())
 
 
-def list_tools(url: str, session_id: str | None, bearer: str | None = None) -> list[dict]:
-    payload = {"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}}
-    resp, _, _ = post(url, payload, session_id=session_id, bearer=bearer)
-    if not resp or "error" in resp:
-        raise RuntimeError(f"tools/list failed: {resp}")
-    result = resp.get("result", {})
-    return result.get("tools", [])
+class MCPClient:
+    """Small Streamable HTTP client with the specified legacy SSE fallback."""
+
+    def __init__(self, url: str, bearer: str | None = None, timeout: int = 30):
+        self.url = url
+        self.bearer = bearer
+        self.timeout = timeout
+        self.session_id: str | None = None
+        self.protocol_version: str | None = None
+        self._sse_response: Any | None = None
+        self._legacy_message_url: str | None = None
+
+    @property
+    def is_legacy_sse(self) -> bool:
+        return self._legacy_message_url is not None
+
+    def _auth_headers(self) -> dict[str, str]:
+        return {"Authorization": f"Bearer {self.bearer}"} if self.bearer else {}
+
+    def _connect_legacy_sse(self) -> None:
+        headers = {"Accept": "text/event-stream", **self._auth_headers()}
+        req = urllib.request.Request(self.url, headers=headers, method="GET")
+        self._sse_response = urllib.request.urlopen(req, timeout=self.timeout)
+        event_type, endpoint = read_sse_event(self._sse_response)
+        if event_type != "endpoint":
+            raise RuntimeError(f"legacy SSE stream's first event was {event_type!r}, not 'endpoint'")
+        message_url = urljoin(self.url, endpoint)
+        base = urlparse(self.url)
+        target = urlparse(message_url)
+        if (target.scheme, target.netloc) != (base.scheme, base.netloc):
+            raise RuntimeError("legacy SSE message endpoint must use the server URL's origin")
+        self._legacy_message_url = message_url
+
+    def _legacy_send(self, payload: dict) -> dict | None:
+        assert self._legacy_message_url and self._sse_response
+        resp, _, status = post(
+            self._legacy_message_url, payload, bearer=self.bearer, timeout=self.timeout,
+            protocol_version=self.protocol_version,
+        )
+        if status < 200 or status >= 300:
+            raise RuntimeError(f"legacy SSE message POST failed: {resp}")
+        if "id" not in payload:
+            return None
+        while True:
+            _, data = read_sse_event(self._sse_response)
+            try:
+                message = json.loads(data)
+            except json.JSONDecodeError:
+                continue
+            if message.get("id") == payload["id"]:
+                return message
+
+    def send(self, payload: dict, allow_legacy_fallback: bool = False) -> dict | None:
+        if self.is_legacy_sse:
+            return self._legacy_send(payload)
+        resp, sid, status = post(
+            self.url, payload, session_id=self.session_id, bearer=self.bearer,
+            timeout=self.timeout, protocol_version=self.protocol_version,
+        )
+        if allow_legacy_fallback and 400 <= status < 500:
+            self._connect_legacy_sse()
+            return self._legacy_send(payload)
+        if status < 200 or status >= 300 or (resp and "error" in resp):
+            raise RuntimeError(f"MCP request failed: {resp}")
+        if sid:
+            self.session_id = sid
+        if "id" in payload and not resp:
+            raise RuntimeError("MCP request returned no JSON-RPC response")
+        return resp
+
+    def initialize(self) -> None:
+        payload = {
+            "jsonrpc": "2.0", "id": 0, "method": "initialize",
+            "params": {
+                "protocolVersion": PROTOCOL_VERSION,
+                "capabilities": {},
+                "clientInfo": {"name": "mcp-compliance-test", "version": "1.0"},
+            },
+        }
+        response = self.send(payload, allow_legacy_fallback=True)
+        if not response or "result" not in response:
+            raise RuntimeError(f"initialize failed: {response}")
+        self.protocol_version = response["result"].get("protocolVersion", PROTOCOL_VERSION)
+        self.send({"jsonrpc": "2.0", "method": "notifications/initialized"})
+
+    def list_tools(self) -> list[dict]:
+        response = self.send({"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}})
+        if not response or "result" not in response:
+            raise RuntimeError(f"tools/list failed: {response}")
+        return response["result"].get("tools", [])
+
+    def close(self) -> None:
+        if self._sse_response is not None:
+            self._sse_response.close()
+            self._sse_response = None
 
 
 def load_contract_schemas(schemas_dir: Path) -> dict[str, dict]:
@@ -111,42 +217,38 @@ def load_contract_schemas(schemas_dir: Path) -> dict[str, dict]:
     for path in schemas_dir.glob("*.json"):
         try:
             schema = json.loads(path.read_text())
+            if not isinstance(schema, dict):
+                raise ValueError(f"contract schema {path} must be a JSON object")
             tool_name = path.stem
             schemas[tool_name] = schema
-        except json.JSONDecodeError as e:
-            print(f"WARN: malformed schema {path}: {e}", file=sys.stderr)
+        except (OSError, json.JSONDecodeError) as e:
+            raise ValueError(f"cannot load contract schema {path}: {e}") from e
     return schemas
 
 
 def schemas_compatible(live: dict, contract: dict) -> tuple[bool, list[str]]:
-    """Compare live inputSchema with contract schema. Returns (ok, list_of_issues)."""
-    issues = []
+    """Require equal validation semantics while ignoring annotation-only keywords."""
+    def validation_schema(value: Any) -> Any:
+        if isinstance(value, dict):
+            normalized = {
+                key: validation_schema(item)
+                for key, item in value.items()
+                if key not in SCHEMA_ANNOTATIONS
+            }
+            if normalized.get("type") == "object":
+                normalized.setdefault("properties", {})
+                normalized.setdefault("required", [])
+                normalized.setdefault("additionalProperties", True)
+            if isinstance(normalized.get("required"), list):
+                normalized["required"] = sorted(normalized["required"])
+            return normalized
+        if isinstance(value, list):
+            return [validation_schema(item) for item in value]
+        return value
 
-    # Required keys: type=object
-    if live.get("type") != "object":
-        issues.append(f"live type={live.get('type')!r}, contract requires 'object'")
-
-    # Properties: contract MUST be a subset of live (live can have more,
-    # but every contract property must exist in live with compatible type).
-    live_props = live.get("properties", {}) or {}
-    contract_props = contract.get("properties", {}) or {}
-    for prop, contract_schema in contract_props.items():
-        if prop not in live_props:
-            issues.append(f"live missing required property {prop!r}")
-            continue
-        live_type = live_props[prop].get("type")
-        contract_type = contract_schema.get("type")
-        if contract_type and live_type != contract_type:
-            issues.append(f"property {prop!r}: live type={live_type!r}, contract type={contract_type!r}")
-
-    # Required: contract's required[] MUST be a subset of live's required[]
-    contract_required = set(contract.get("required") or [])
-    live_required = set(live.get("required") or [])
-    missing = contract_required - live_required
-    if missing:
-        issues.append(f"contract requires {sorted(missing)} but live doesn't")
-
-    return (not issues, issues)
+    if validation_schema(live) == validation_schema(contract):
+        return True, []
+    return False, ["live inputSchema validation rules differ from the canonical contract"]
 
 
 def main() -> int:
@@ -158,8 +260,9 @@ def main() -> int:
                     help="Environment variable containing the bearer token (default: MCP_BEARER_TOKEN)")
     ap.add_argument("--schemas-dir", default=str(Path(__file__).parent / "schemas" / "tools"),
                     help="Directory with contract schemas (default: ./schemas/tools/)")
-    ap.add_argument("--strict-naming", action="store_true",
-                    help="Fail if any live tool name violates the naming convention")
+    ap.add_argument("--strict-naming", action="store_true", help=argparse.SUPPRESS)
+    ap.add_argument("--allow-invalid-names", action="store_true",
+                    help="Warn instead of failing for legacy tool names")
     args = ap.parse_args()
 
     url_error = validate_endpoint_url(args.url)
@@ -173,20 +276,34 @@ def main() -> int:
         print(f"FATAL: schemas dir not found: {schemas_dir}", file=sys.stderr)
         return 2
 
-    contract_schemas = load_contract_schemas(schemas_dir)
+    try:
+        contract_schemas = load_contract_schemas(schemas_dir)
+    except ValueError as exc:
+        print(f"FATAL: {exc}", file=sys.stderr)
+        return 2
+    if not contract_schemas:
+        print(f"FATAL: no contract schemas found in {schemas_dir}", file=sys.stderr)
+        return 2
     print(f"[compliance] loaded {len(contract_schemas)} contract schemas from {schemas_dir}")
     print(f"[compliance] connecting to {args.url}")
 
-    sid = init_session(args.url, bearer=bearer)
-    if sid is None:
-        print("FATAL: MCP initialize handshake failed", file=sys.stderr)
+    client = MCPClient(args.url, bearer=bearer)
+    try:
+        client.initialize()
+        tools = client.list_tools()
+    except Exception as exc:
+        print(f"FATAL: MCP communication failed: {exc}", file=sys.stderr)
         return 1
+    finally:
+        client.close()
 
-    print(f"[compliance] session: {sid or '(none returned — SSE)'}")
-    tools = list_tools(args.url, sid, bearer=bearer)
+    session = client.session_id or ("legacy SSE" if client.is_legacy_sse else "none returned")
+    print(f"[compliance] session: {session}")
     print(f"[compliance] live tools: {len(tools)}")
 
     failures: list[str] = []
+    if not tools:
+        failures.append("server returned an empty tool registry")
 
     for tool in tools:
         name = tool.get("name")
@@ -197,10 +314,10 @@ def main() -> int:
         # 2. naming convention
         if not NAMING_RE.match(name):
             msg = f"tool {name!r}: violates naming convention (expected '<domain>_<action>[_<target>]')"
-            if args.strict_naming:
-                failures.append(msg)
-            else:
+            if args.allow_invalid_names:
                 print(f"WARN: {msg}", file=sys.stderr)
+            else:
+                failures.append(msg)
 
         # 3. schema match
         if name in contract_schemas:
@@ -212,7 +329,7 @@ def main() -> int:
             else:
                 print(f"  ✓ {name}: schema matches contract")
         else:
-            print(f"  · {name}: no contract schema in repo (skipping schema check)")
+            failures.append(f"tool {name!r}: no contract schema in {schemas_dir}")
 
     print(f"\n[compliance] tested {len(tools)} live tools against {len(contract_schemas)} contract schemas")
     if failures:
