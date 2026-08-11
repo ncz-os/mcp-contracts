@@ -89,6 +89,29 @@ class ComplianceCheckerTests(unittest.TestCase):
         self.assertEqual(methods, ["initialize", "notifications/initialized", "tools/list"])
         self.assertEqual(post.call_args_list[1].kwargs["session_id"], "sid")
 
+    def test_initialize_requests_current_protocol_and_accepts_supported_legacy(self):
+        response = ({
+            "jsonrpc": "2.0", "id": 0,
+            "result": {"protocolVersion": "2025-06-18"},
+        }, "sid", 200)
+        with mock.patch.object(checker, "post", side_effect=[response, (None, None, 202)]) as post:
+            client = checker.MCPClient("http://localhost/mcp")
+            client.initialize()
+        initialize = post.call_args_list[0].args[1]
+        self.assertEqual(initialize["params"]["protocolVersion"], "2025-11-25")
+        self.assertEqual(client.protocol_version, "2025-06-18")
+
+    def test_initialize_accepts_current_protocol_selection(self):
+        response = ({
+            "jsonrpc": "2.0", "id": 0,
+            "result": {"protocolVersion": "2025-11-25"},
+        }, "sid", 200)
+        with mock.patch.object(checker, "post", side_effect=[response, (None, None, 202)]) as post:
+            client = checker.MCPClient("http://localhost/mcp")
+            client.initialize()
+        self.assertEqual(client.protocol_version, "2025-11-25")
+        self.assertEqual(post.call_args_list[1].kwargs["protocol_version"], "2025-11-25")
+
     def test_initialize_rejects_unsupported_protocol_before_initialized(self):
         response = ({"jsonrpc": "2.0", "id": 0, "result": {"protocolVersion": "2099-01-01"}}, "sid", 200)
         with mock.patch.object(checker, "post", return_value=response) as post:
@@ -100,6 +123,62 @@ class ComplianceCheckerTests(unittest.TestCase):
         expected = {"jsonrpc": "2.0", "id": 1}
         self.assertEqual(checker.parse_sse('data:{"jsonrpc":"2.0","id":1}\n\n'), expected)
         self.assertEqual(checker.parse_sse('data: {"jsonrpc":"2.0",\ndata: "id":1}\n\n'), expected)
+
+    def test_streamable_http_selects_response_matching_request_id(self):
+        body = (
+            b'data: {"jsonrpc":"2.0","method":"notifications/progress","params":{}}\n\n'
+            b'data: {"jsonrpc":"2.0","id":99,"method":"sampling/createMessage","params":{}}\n\n'
+            b'data: {"jsonrpc":"2.0","id":1,"result":{"tools":[]}}\n\n'
+        )
+        response = mock.MagicMock()
+        response.read.return_value = body
+        response.headers.get.return_value = "sid"
+        response.status = 200
+        opened = mock.MagicMock()
+        opened.__enter__.return_value = response
+        with mock.patch.object(checker.urllib.request, "urlopen", return_value=opened):
+            message, session_id, status = checker.post(
+                "http://localhost/mcp",
+                {"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}},
+            )
+        self.assertEqual(message, {"jsonrpc": "2.0", "id": 1, "result": {"tools": []}})
+        self.assertEqual((session_id, status), ("sid", 200))
+
+    def test_tools_list_follows_pagination(self):
+        pages = [
+            {"jsonrpc": "2.0", "id": 1, "result": {
+                "tools": [{"name": "memory_create"}], "nextCursor": "page-2",
+            }},
+            {"jsonrpc": "2.0", "id": 1, "result": {
+                "tools": [{"name": "memory_search"}],
+            }},
+        ]
+        client = checker.MCPClient("http://localhost/mcp")
+        with mock.patch.object(client, "send", side_effect=pages) as send:
+            self.assertEqual(
+                [tool["name"] for tool in client.list_tools()],
+                ["memory_create", "memory_search"],
+            )
+        self.assertEqual(send.call_args_list[0].args[0]["params"], {})
+        self.assertEqual(send.call_args_list[1].args[0]["params"], {"cursor": "page-2"})
+
+    def test_tools_list_rejects_repeated_cursor_and_duplicate_name(self):
+        repeated_cursor = [
+            {"result": {"tools": [{"name": "memory_create"}], "nextCursor": "same"}},
+            {"result": {"tools": [{"name": "memory_search"}], "nextCursor": "same"}},
+        ]
+        client = checker.MCPClient("http://localhost/mcp")
+        with mock.patch.object(client, "send", side_effect=repeated_cursor):
+            with self.assertRaisesRegex(RuntimeError, "repeated cursor"):
+                client.list_tools()
+
+        duplicate_name = [
+            {"result": {"tools": [{"name": "memory_create"}], "nextCursor": "next"}},
+            {"result": {"tools": [{"name": "memory_create"}]}},
+        ]
+        with mock.patch.object(client, "send", side_effect=duplicate_name):
+            with self.assertRaisesRegex(RuntimeError, "duplicate tool name"):
+                client.list_tools()
 
     def test_schema_comparison_rejects_extra_required_field_and_constraint(self):
         extra_required = json.loads(json.dumps(CONTRACT))

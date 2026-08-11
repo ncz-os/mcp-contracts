@@ -38,8 +38,8 @@ from urllib.parse import urljoin, urlparse
 
 NAMING_RE = re.compile(r"^[a-z][a-z0-9]*(_[a-z][a-z0-9]*)+$")
 MAX_RESPONSE_BYTES = 8 * 1024 * 1024
-PROTOCOL_VERSION = "2025-06-18"
-SUPPORTED_PROTOCOL_VERSIONS = frozenset({PROTOCOL_VERSION})
+PROTOCOL_VERSION = "2025-11-25"
+SUPPORTED_PROTOCOL_VERSIONS = frozenset({PROTOCOL_VERSION, "2025-06-18"})
 SCHEMA_ANNOTATIONS = {
     "$comment", "$schema", "deprecated", "description", "examples",
     "readOnly", "title", "writeOnly",
@@ -47,22 +47,45 @@ SCHEMA_ANNOTATIONS = {
 ORDER_INSENSITIVE_ARRAYS = frozenset({"allOf", "anyOf", "enum", "oneOf", "required", "type"})
 
 
-def parse_sse(body: str) -> dict | None:
-    """Return the first JSON object in an SSE body, accepting optional data whitespace."""
+_ANY_RESPONSE_ID = object()
+
+
+def parse_sse(body: str, response_id: Any = _ANY_RESPONSE_ID) -> dict | None:
+    """Return the JSON response matching response_id from an SSE or JSON body."""
+    saw_sse_data = False
     data_lines: list[str] = []
     for line in [*body.splitlines(), ""]:
         if line.startswith("data:"):
+            saw_sse_data = True
             value = line[5:]
             data_lines.append(value[1:] if value.startswith(" ") else value)
         elif not line and data_lines:
             try:
-                return json.loads("\n".join(data_lines))
+                message = json.loads("\n".join(data_lines))
             except json.JSONDecodeError:
-                data_lines = []
+                pass
+            else:
+                if (isinstance(message, dict)
+                        and (response_id is _ANY_RESPONSE_ID
+                             or (message.get("id") == response_id
+                                 and "method" not in message
+                                 and ("result" in message or "error" in message)))):
+                    return message
+            data_lines = []
+    if saw_sse_data:
+        return None
     try:
-        return json.loads(body)
+        message = json.loads(body)
     except json.JSONDecodeError:
         return None
+    if not isinstance(message, dict):
+        return None
+    if response_id is _ANY_RESPONSE_ID:
+        return message
+    if (message.get("id") == response_id and "method" not in message
+            and ("result" in message or "error" in message)):
+        return message
+    return None
 
 
 def post(url: str, payload: dict, session_id: str | None = None,
@@ -82,7 +105,8 @@ def post(url: str, payload: dict, session_id: str | None = None,
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             body = read_capped_body(resp)
-            return parse_sse(body), resp.headers.get("mcp-session-id"), resp.status
+            response_id = payload.get("id", _ANY_RESPONSE_ID)
+            return parse_sse(body, response_id), resp.headers.get("mcp-session-id"), resp.status
     except urllib.error.HTTPError as exc:
         return {"error": str(exc)}, None, exc.code
     except Exception as exc:
@@ -210,10 +234,36 @@ class MCPClient:
         self.send({"jsonrpc": "2.0", "method": "notifications/initialized"})
 
     def list_tools(self) -> list[dict]:
-        response = self.send({"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}})
-        if not response or "result" not in response:
-            raise RuntimeError(f"tools/list failed: {response}")
-        return response["result"].get("tools", [])
+        tools: list[dict] = []
+        seen_cursors: set[str] = set()
+        seen_names: set[Any] = set()
+        cursor: str | None = None
+        while True:
+            params = {} if cursor is None else {"cursor": cursor}
+            response = self.send({
+                "jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": params,
+            })
+            if not response or "result" not in response:
+                raise RuntimeError(f"tools/list failed: {response}")
+            result = response["result"]
+            page = result.get("tools", [])
+            if not isinstance(page, list) or not all(isinstance(tool, dict) for tool in page):
+                raise RuntimeError("tools/list returned a malformed tools array")
+            for tool in page:
+                name = tool.get("name")
+                if name in seen_names:
+                    raise RuntimeError(f"tools/list returned duplicate tool name {name!r}")
+                seen_names.add(name)
+                tools.append(tool)
+            next_cursor = result.get("nextCursor")
+            if next_cursor is None:
+                return tools
+            if not isinstance(next_cursor, str):
+                raise RuntimeError("tools/list returned a non-string nextCursor")
+            if next_cursor in seen_cursors:
+                raise RuntimeError(f"tools/list repeated cursor {next_cursor!r}")
+            seen_cursors.add(next_cursor)
+            cursor = next_cursor
 
     def call_tool(self, name: str, arguments: dict[str, Any]) -> dict:
         response = self.send({
