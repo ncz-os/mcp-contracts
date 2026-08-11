@@ -1,0 +1,21 @@
+{
+  "properties": {
+    "filter_capabilities": {
+      "description": "Optional required capabilities such as code or reasoning.",
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 32,
+      "type": "array"
+    },
+    "filter_tier": {
+      "description": "Optional usage tier filter such as budget, premium, or frontier.",
+      "type": "string"
+    },
+    "max_cost": {
+      "description": "Optional maximum USD per MTok.",
+      "type": "number"
+    }
+  },
+  "type": "object"
+}

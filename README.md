@@ -11,7 +11,8 @@ validates its MCP surface against the schemas here.
 
 ## What's in here
 
-- `schemas/tools/` — JSON Schema for each tool's `inputSchema`. Filename = tool name. Each tool MUST conform to its schema; the cross-project compliance test (`test_mcp_compliance.py`, lives in each project) validates this.
+- `projects/` — explicit project manifests listing required tools, optional feature-gated tools, and the project's schema directory.
+- `schemas/tools/` — JSON Schema for each tool's `inputSchema`. MNEMOS contracts live in `schemas/tools/mnemos/`; the four ic-engine contracts remain in `schemas/tools/`.
 - `schemas/errors/` — JSON Schema for the canonical error envelope returned in `ic_result`-style payloads.
 - `docs/naming-convention.md` — `domain_action` tool naming rules.
 - `docs/error-envelope.md` — error payload shape both Python and Rust services emit.
@@ -25,16 +26,27 @@ validates its MCP surface against the schemas here.
 
 ## Adding a tool
 
-1. Add `schemas/tools/<tool_name>.json` with the JSON Schema inputSchema.
-2. Add an entry to the project's TOOL_REGISTRY (in mnemos: `mnemos/mcp/tools/__init__.py`; in ic-engine: `bridge/investorclaw_bridge/mcp/tools/__init__.py`).
-3. Run the project's `test_mcp_compliance.py` to verify the live MCP server returns matching schemas.
+1. Add the tool's JSON Schema to the schema directory named by its project manifest.
+2. Declare it in `required_tools`, or in `optional_tools` when a documented feature gate controls registration.
+3. Add an entry to the project's TOOL_REGISTRY (in mnemos: `mnemos/mcp/tools/__init__.py`; in ic-engine: `bridge/investorclaw_bridge/mcp/tools/__init__.py`).
+4. Run the compliance checker with the explicit project selection.
 
 For bearer-protected transports, keep tokens out of shell history and process
 argv:
 
 ```bash
-MCP_BEARER_TOKEN=... python3 test_mcp_compliance.py --url http://localhost:5004/sse
+MCP_BEARER_TOKEN=... python3 test_mcp_compliance.py --project mnemos --url http://localhost:5004/sse
 ```
+
+For ic-engine:
+
+```bash
+python3 test_mcp_compliance.py --project ic-engine --url http://localhost:18090/mcp
+```
+
+Project selection is mandatory. This prevents a server from being compared with
+an unrelated project's contracts. `--schemas-dir` remains available for an
+explicit custom contract set; every schema in that directory is then required.
 
 ## Naming convention
 

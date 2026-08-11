@@ -1,0 +1,21 @@
+{
+  "properties": {
+    "messages": {
+      "description": "OpenAI-style chat messages.",
+      "items": {
+        "type": "object"
+      },
+      "maxItems": 100,
+      "type": "array"
+    },
+    "model_or_alias": {
+      "description": "Literal model name or PANTHEON alias such as auto:reasoning.",
+      "type": "string"
+    }
+  },
+  "required": [
+    "messages",
+    "model_or_alias"
+  ],
+  "type": "object"
+}

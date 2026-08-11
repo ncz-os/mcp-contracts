@@ -1,0 +1,11 @@
+{
+  "properties": {
+    "memory_id": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "memory_id"
+  ],
+  "type": "object"
+}

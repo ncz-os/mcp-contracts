@@ -1,0 +1,11 @@
+{
+  "properties": {
+    "triple_id": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "triple_id"
+  ],
+  "type": "object"
+}

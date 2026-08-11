@@ -1,0 +1,33 @@
+{
+  "properties": {
+    "consultation_id": {
+      "description": "The consultation_id returned by a prior graeae_consult / listed by graeae_list_consultations.",
+      "type": "string"
+    },
+    "page": {
+      "description": "1-based page number within the section. Default 1.",
+      "minimum": 1,
+      "type": "integer"
+    },
+    "page_size": {
+      "description": "Char budget per page before a part is split into sub-pages. Default 6000.",
+      "minimum": 1,
+      "type": "integer"
+    },
+    "section": {
+      "description": "Which classified part(s) to return. Default 'all'.",
+      "enum": [
+        "all",
+        "source",
+        "quorum",
+        "synthesis",
+        "muses"
+      ],
+      "type": "string"
+    }
+  },
+  "required": [
+    "consultation_id"
+  ],
+  "type": "object"
+}

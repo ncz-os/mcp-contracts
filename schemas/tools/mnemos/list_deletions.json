@@ -1,0 +1,28 @@
+{
+  "properties": {
+    "from_ts": {
+      "description": "Inclusive lower requested_at bound.",
+      "format": "date-time",
+      "type": "string"
+    },
+    "owner_id": {
+      "description": "Optional owner_id filter.",
+      "type": "string"
+    },
+    "page": {
+      "default": 1,
+      "minimum": 1,
+      "type": "integer"
+    },
+    "to_ts": {
+      "description": "Inclusive upper requested_at bound.",
+      "format": "date-time",
+      "type": "string"
+    }
+  },
+  "required": [
+    "from_ts",
+    "to_ts"
+  ],
+  "type": "object"
+}

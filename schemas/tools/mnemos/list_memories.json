@@ -1,0 +1,23 @@
+{
+  "properties": {
+    "category": {
+      "type": "string"
+    },
+    "limit": {
+      "default": 20,
+      "maximum": 500,
+      "minimum": 1,
+      "type": "integer"
+    },
+    "offset": {
+      "default": 0,
+      "maximum": 100000,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "subcategory": {
+      "type": "string"
+    }
+  },
+  "type": "object"
+}

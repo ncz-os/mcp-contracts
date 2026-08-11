@@ -1,0 +1,12 @@
+{
+  "properties": {
+    "namespace": {
+      "description": "Namespace to inspect",
+      "type": "string"
+    }
+  },
+  "required": [
+    "namespace"
+  ],
+  "type": "object"
+}

@@ -1,0 +1,39 @@
+{
+  "properties": {
+    "category": {
+      "description": "Optional category filter",
+      "type": "string"
+    },
+    "limit": {
+      "default": 10,
+      "maximum": 500,
+      "minimum": 1,
+      "type": "integer"
+    },
+    "mode": {
+      "default": "semantic",
+      "description": "Search toggle. 'semantic' (default) = pgvector cosine similarity with automatic full-text fallback when the query can't be embedded or returns no vector hits; 'lexical' = full-text token match only. Use 'lexical' for exact keyword/identifier lookups.",
+      "enum": [
+        "semantic",
+        "lexical"
+      ],
+      "type": "string"
+    },
+    "query": {
+      "description": "Search query",
+      "type": "string"
+    },
+    "semantic": {
+      "description": "Deprecated back-compat alias for `mode`; when set it overrides mode (true=semantic, false=lexical).",
+      "type": "boolean"
+    },
+    "subcategory": {
+      "description": "Optional subcategory filter",
+      "type": "string"
+    }
+  },
+  "required": [
+    "query"
+  ],
+  "type": "object"
+}

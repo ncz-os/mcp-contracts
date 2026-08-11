@@ -1,0 +1,26 @@
+{
+  "properties": {
+    "limit": {
+      "default": 50,
+      "maximum": 500,
+      "minimum": 1,
+      "type": "integer"
+    },
+    "object": {
+      "type": "string"
+    },
+    "object_type": {
+      "type": "string"
+    },
+    "predicate": {
+      "type": "string"
+    },
+    "subject": {
+      "type": "string"
+    },
+    "subject_type": {
+      "type": "string"
+    }
+  },
+  "type": "object"
+}

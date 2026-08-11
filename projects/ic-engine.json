@@ -1,0 +1,10 @@
+{
+  "schemas_dir": "../schemas/tools",
+  "required_tools": [
+    "portfolio_ask",
+    "portfolio_holdings",
+    "portfolio_refresh",
+    "portfolio_setup"
+  ],
+  "optional_tools": []
+}

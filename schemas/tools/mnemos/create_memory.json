@@ -1,0 +1,25 @@
+{
+  "properties": {
+    "category": {
+      "default": "facts",
+      "type": "string"
+    },
+    "content": {
+      "type": "string"
+    },
+    "metadata": {
+      "type": "object"
+    },
+    "permission_mode": {
+      "description": "Unix-style octal permission digits, e.g. 600 or 644",
+      "type": "integer"
+    },
+    "subcategory": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "content"
+  ],
+  "type": "object"
+}

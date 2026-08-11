@@ -1,0 +1,36 @@
+{
+  "properties": {
+    "memories": {
+      "items": {
+        "properties": {
+          "category": {
+            "default": "facts",
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          },
+          "metadata": {
+            "type": "object"
+          },
+          "subcategory": {
+            "type": "string"
+          },
+          "verbatim_content": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "content"
+        ],
+        "type": "object"
+      },
+      "maxItems": 100,
+      "type": "array"
+    }
+  },
+  "required": [
+    "memories"
+  ],
+  "type": "object"
+}

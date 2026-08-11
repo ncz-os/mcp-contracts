@@ -45,6 +45,9 @@ These are the cross-project invariants — shared via this repo:
 3. **Error envelope** (Form A or Form B; see `error-envelope.md`).
 4. **Verification line text format** (the cobol harness regex parses this).
 
-Both projects' compliance test (`test_mcp_compliance.py` in each repo)
-validates these invariants against a live MCP server. Same test, same
-schemas, different transports. That's the contract.
+The compliance checker validates these invariants against a live MCP server
+using an explicit project manifest (`--project mnemos` or
+`--project ic-engine`). It checks in both directions: undeclared live tools and
+missing required tools are drift. A manifest can declare feature-gated tools as
+optional. The MNEMOS manifest also invokes a deterministic unknown-tool probe
+and validates its decoded content against the Form A error schema.

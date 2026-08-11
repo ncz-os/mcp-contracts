@@ -1,0 +1,31 @@
+{
+  "properties": {
+    "category": {
+      "description": "New category",
+      "type": "string"
+    },
+    "content": {
+      "description": "New content (replaces existing)",
+      "type": "string"
+    },
+    "memory_id": {
+      "type": "string"
+    },
+    "metadata": {
+      "description": "New metadata (replaces existing)",
+      "type": "object"
+    },
+    "permission_mode": {
+      "description": "Unix-style octal permission digits, e.g. 600 or 644",
+      "type": "integer"
+    },
+    "subcategory": {
+      "description": "New subcategory",
+      "type": "string"
+    }
+  },
+  "required": [
+    "memory_id"
+  ],
+  "type": "object"
+}

@@ -1,0 +1,28 @@
+{
+  "properties": {
+    "category": {
+      "description": "Task category mapped to GRAEAE task_type. Default: 'general'. Common values: reasoning, architecture_design, code_generation, web_search.",
+      "type": "string"
+    },
+    "mode": {
+      "description": "Consultation mode. Default: 'auto'. Supported: auto, single, debate, majority, all, local, external.",
+      "type": "string"
+    },
+    "muses": {
+      "description": "Optional list of provider names to consult (e.g. ['claude', 'openai', 'gemini']). When set, only those providers are queried. When omitted, the engine uses its default auto lineup.",
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 16,
+      "type": "array"
+    },
+    "prompt": {
+      "description": "The consultation prompt or question to submit.",
+      "type": "string"
+    }
+  },
+  "required": [
+    "prompt"
+  ],
+  "type": "object"
+}

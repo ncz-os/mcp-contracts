@@ -1,0 +1,18 @@
+{
+  "properties": {
+    "commit_hash": {
+      "description": "Commit hash to fetch",
+      "maxLength": 128,
+      "type": "string"
+    },
+    "memory_id": {
+      "description": "Memory ID",
+      "type": "string"
+    }
+  },
+  "required": [
+    "memory_id",
+    "commit_hash"
+  ],
+  "type": "object"
+}

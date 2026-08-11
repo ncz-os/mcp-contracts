@@ -1,0 +1,17 @@
+{
+  "properties": {
+    "limit": {
+      "default": 100,
+      "maximum": 1000,
+      "minimum": 1,
+      "type": "integer"
+    },
+    "subject": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "subject"
+  ],
+  "type": "object"
+}

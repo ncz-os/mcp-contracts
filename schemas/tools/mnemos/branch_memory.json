@@ -1,0 +1,23 @@
+{
+  "properties": {
+    "from_commit": {
+      "description": "Commit hash (default: main HEAD)",
+      "maxLength": 128,
+      "type": "string"
+    },
+    "memory_id": {
+      "description": "Memory ID",
+      "type": "string"
+    },
+    "name": {
+      "description": "New branch name",
+      "maxLength": 128,
+      "type": "string"
+    }
+  },
+  "required": [
+    "memory_id",
+    "name"
+  ],
+  "type": "object"
+}

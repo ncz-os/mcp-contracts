@@ -1,0 +1,23 @@
+{
+  "properties": {
+    "branch": {
+      "description": "Branch name (default: main)",
+      "maxLength": 128,
+      "type": "string"
+    },
+    "limit": {
+      "description": "Max commits (default: 50)",
+      "maximum": 500,
+      "minimum": 1,
+      "type": "integer"
+    },
+    "memory_id": {
+      "description": "Memory ID",
+      "type": "string"
+    }
+  },
+  "required": [
+    "memory_id"
+  ],
+  "type": "object"
+}

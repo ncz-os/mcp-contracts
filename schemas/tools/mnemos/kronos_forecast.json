@@ -1,0 +1,18 @@
+{
+  "properties": {
+    "hours_ahead": {
+      "default": 24,
+      "maximum": 720,
+      "minimum": 1,
+      "type": "integer"
+    },
+    "namespace": {
+      "description": "Namespace to forecast",
+      "type": "string"
+    }
+  },
+  "required": [
+    "namespace"
+  ],
+  "type": "object"
+}

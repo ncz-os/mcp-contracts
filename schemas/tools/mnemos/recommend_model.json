@@ -1,0 +1,20 @@
+{
+  "properties": {
+    "cost_budget": {
+      "description": "Max $/MTok (default: 10.0)",
+      "type": "number"
+    },
+    "quality_floor": {
+      "description": "Min quality score (default: 0.7)",
+      "type": "number"
+    },
+    "task_type": {
+      "description": "Task type (code_generation, reasoning, architecture_design, etc.)",
+      "type": "string"
+    }
+  },
+  "required": [
+    "task_type"
+  ],
+  "type": "object"
+}

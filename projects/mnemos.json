@@ -1,0 +1,37 @@
+{
+  "schemas_dir": "../schemas/tools/mnemos",
+  "required_tools": [
+    "search_memories",
+    "update_memory",
+    "get_memory",
+    "create_memory",
+    "delete_memory",
+    "list_memories",
+    "get_stats",
+    "kg_create_triple",
+    "kg_search",
+    "kg_timeline",
+    "update_triple",
+    "delete_triple",
+    "bulk_create_memories",
+    "log_memory",
+    "branch_memory",
+    "diff_memory_commits",
+    "checkout_memory",
+    "recommend_model",
+    "list_deletions"
+  ],
+  "optional_tools": [
+    "pantheon_list_models",
+    "pantheon_route_explain",
+    "graeae_consult",
+    "graeae_get_consultation",
+    "kronos_anomalies",
+    "kronos_forecast"
+  ],
+  "error_probe": {
+    "tool": "__mcp_contract_error_probe__",
+    "arguments": {},
+    "schema": "tool_error_envelope.json"
+  }
+}

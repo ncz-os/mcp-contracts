@@ -1,0 +1,24 @@
+{
+  "properties": {
+    "commit_a": {
+      "description": "First commit hash (older)",
+      "maxLength": 128,
+      "type": "string"
+    },
+    "commit_b": {
+      "description": "Second commit hash (newer)",
+      "maxLength": 128,
+      "type": "string"
+    },
+    "memory_id": {
+      "description": "Memory ID",
+      "type": "string"
+    }
+  },
+  "required": [
+    "memory_id",
+    "commit_a",
+    "commit_b"
+  ],
+  "type": "object"
+}

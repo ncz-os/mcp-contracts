@@ -1,0 +1,19 @@
+{
+  "properties": {
+    "format": {
+      "description": "Optional. ``prose`` \u2192 text/plain narration. ``dense`` \u2192 application/x-apollo-dense raw variant. Omit for default JSON.",
+      "enum": [
+        "prose",
+        "dense"
+      ],
+      "type": "string"
+    },
+    "memory_id": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "memory_id"
+  ],
+  "type": "object"
+}

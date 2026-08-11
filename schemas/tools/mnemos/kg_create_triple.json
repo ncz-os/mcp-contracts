@@ -1,0 +1,43 @@
+{
+  "properties": {
+    "confidence": {
+      "default": 1.0,
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "type": "number"
+    },
+    "memory_id": {
+      "description": "Link to source memory",
+      "type": "string"
+    },
+    "object": {
+      "type": "string"
+    },
+    "object_type": {
+      "type": "string"
+    },
+    "predicate": {
+      "type": "string"
+    },
+    "subject": {
+      "type": "string"
+    },
+    "subject_type": {
+      "type": "string"
+    },
+    "valid_from": {
+      "description": "ISO8601 datetime",
+      "type": "string"
+    },
+    "valid_until": {
+      "description": "ISO8601 datetime",
+      "type": "string"
+    }
+  },
+  "required": [
+    "subject",
+    "predicate",
+    "object"
+  ],
+  "type": "object"
+}

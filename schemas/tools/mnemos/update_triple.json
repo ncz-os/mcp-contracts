@@ -1,0 +1,35 @@
+{
+  "properties": {
+    "confidence": {
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "type": "number"
+    },
+    "object": {
+      "type": "string"
+    },
+    "object_type": {
+      "type": "string"
+    },
+    "predicate": {
+      "type": "string"
+    },
+    "subject": {
+      "type": "string"
+    },
+    "subject_type": {
+      "type": "string"
+    },
+    "triple_id": {
+      "type": "string"
+    },
+    "valid_until": {
+      "description": "ISO8601",
+      "type": "string"
+    }
+  },
+  "required": [
+    "triple_id"
+  ],
+  "type": "object"
+}
