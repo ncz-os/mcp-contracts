@@ -38,6 +38,7 @@ from urllib.parse import urljoin, urlparse
 
 NAMING_RE = re.compile(r"^[a-z][a-z0-9]*(_[a-z][a-z0-9]*)+$")
 MAX_RESPONSE_BYTES = 8 * 1024 * 1024
+DEFAULT_MAX_TOOL_PAGES = 100
 PROTOCOL_VERSION = "2025-11-25"
 SUPPORTED_PROTOCOL_VERSIONS = frozenset({PROTOCOL_VERSION, "2025-06-18"})
 SCHEMA_ANNOTATIONS = {
@@ -148,10 +149,14 @@ def read_sse_event(resp: Any) -> tuple[str, str]:
 class MCPClient:
     """Small Streamable HTTP client with the specified legacy SSE fallback."""
 
-    def __init__(self, url: str, bearer: str | None = None, timeout: int = 30):
+    def __init__(self, url: str, bearer: str | None = None, timeout: int = 30,
+                 max_tool_pages: int = DEFAULT_MAX_TOOL_PAGES):
+        if max_tool_pages < 1:
+            raise ValueError("max_tool_pages must be at least 1")
         self.url = url
         self.bearer = bearer
         self.timeout = timeout
+        self.max_tool_pages = max_tool_pages
         self.session_id: str | None = None
         self.protocol_version: str | None = None
         self._sse_response: Any | None = None
@@ -238,7 +243,7 @@ class MCPClient:
         seen_cursors: set[str] = set()
         seen_names: set[Any] = set()
         cursor: str | None = None
-        while True:
+        for _ in range(self.max_tool_pages):
             params = {} if cursor is None else {"cursor": cursor}
             response = self.send({
                 "jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": params,
@@ -264,6 +269,9 @@ class MCPClient:
                 raise RuntimeError(f"tools/list repeated cursor {next_cursor!r}")
             seen_cursors.add(next_cursor)
             cursor = next_cursor
+        raise RuntimeError(
+            f"tools/list exceeded the configured {self.max_tool_pages}-page limit"
+        )
 
     def call_tool(self, name: str, arguments: dict[str, Any]) -> dict:
         response = self.send({
@@ -408,7 +416,12 @@ def main() -> int:
     ap.add_argument("--strict-naming", action="store_true", help=argparse.SUPPRESS)
     ap.add_argument("--allow-invalid-names", action="store_true",
                     help="Warn instead of failing for legacy tool names")
+    ap.add_argument("--max-tool-pages", type=int, default=DEFAULT_MAX_TOOL_PAGES,
+                    help=f"Maximum tools/list pages to fetch (default: {DEFAULT_MAX_TOOL_PAGES})")
     args = ap.parse_args()
+
+    if args.max_tool_pages < 1:
+        ap.error("--max-tool-pages must be at least 1")
 
     url_error = validate_endpoint_url(args.url)
     if url_error:
@@ -460,7 +473,7 @@ def main() -> int:
     print(f"[compliance] loaded {len(contract_schemas)} contract schemas from {schemas_dir}")
     print(f"[compliance] connecting to {args.url}")
 
-    client = MCPClient(args.url, bearer=bearer)
+    client = MCPClient(args.url, bearer=bearer, max_tool_pages=args.max_tool_pages)
     try:
         client.initialize()
         tools = client.list_tools()

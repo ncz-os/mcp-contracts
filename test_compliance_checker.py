@@ -180,6 +180,27 @@ class ComplianceCheckerTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "duplicate tool name"):
                 client.list_tools()
 
+    def test_tools_list_has_a_configurable_page_limit(self):
+        pages = [
+            {"result": {"tools": [{"name": "memory_create"}], "nextCursor": "next"}},
+            {"result": {"tools": [{"name": "memory_search"}]}},
+        ]
+        limited_client = checker.MCPClient("http://localhost/mcp", max_tool_pages=1)
+        with mock.patch.object(limited_client, "send", side_effect=pages) as send:
+            with self.assertRaisesRegex(RuntimeError, "configured 1-page limit"):
+                limited_client.list_tools()
+        self.assertEqual(send.call_count, 1)
+
+        client = checker.MCPClient("http://localhost/mcp", max_tool_pages=2)
+        with mock.patch.object(client, "send", side_effect=pages):
+            self.assertEqual(
+                [tool["name"] for tool in client.list_tools()],
+                ["memory_create", "memory_search"],
+            )
+
+        with self.assertRaisesRegex(ValueError, "at least 1"):
+            checker.MCPClient("http://localhost/mcp", max_tool_pages=0)
+
     def test_schema_comparison_rejects_extra_required_field_and_constraint(self):
         extra_required = json.loads(json.dumps(CONTRACT))
         extra_required["properties"]["tenant_id"] = {"type": "string"}
